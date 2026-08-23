@@ -4,10 +4,10 @@
 "use strict";
 
 // ---------------------- State ----------------------
-const STORAGE_KEY = "ecoTrack_v1";
+const STORAGE_KEY = "ecoTrack_v1";// string datatype 
 let appState = {
   assessment: { transport: null, electricity: null, waste: null },
-  results: null,
+  results: null,// null datatype is used , initially results is null, will be updated after assessment
 };
 
 function loadState() {
@@ -40,6 +40,9 @@ const DISPLAY_FONT = "'Space Grotesk', sans-serif";
 
 // Transport — kg CO2e per km, per VEHICLE (divide by occupancy for shared trips).
 // Source: UK DEFRA/BEIS GHG Conversion Factors (2022), average-car / average-motorbike figures.
+// number datatype
+
+// const keyword is used extermenly as a variable is not going to be reassigned, it is a constant value
 const TRANSPORT_PETROL = 0.170;    // average car, petrol
 const TRANSPORT_DIESEL = 0.168;    // average car, diesel
 const TRANSPORT_CNG = 0.115;       // CNG car (DEFRA-derived / IPCC fuel-based estimate)
@@ -757,6 +760,10 @@ const STEP_META = [
 ];
 
 function renderCalculator() {
+  // ---- Auth guard (added): starting an assessment requires login. ----
+  // Logged-out users see a message and are redirected to login.html.
+  // Returns false without rendering anything — flow/formulas untouched.
+  if (typeof window.ecoTrackRequireLogin === "function" && !window.ecoTrackRequireLogin()) return;
   wizard.step = 0;
   const html = `
   <section class="calc-section">
@@ -1001,17 +1008,17 @@ function clearOnInput(form) {
     input.addEventListener("change", () => field.classList.remove("invalid"));
   });
 }
-
-function validateForm(form) {
-  let ok = true;
+// whether the user has entered valid data in
+function validateForm(form) {// The program checks whether the input is required and empty
+  let ok = true; // variabes are declared and initialized
   let firstInvalid = null;
-  form.querySelectorAll(".field").forEach((field) => {
+  form.querySelectorAll(".field").forEach((field) => {// for each loop is used here
     const input = field.querySelector("input, select");
-    const value = input.value;
+    const value = input.value;// this is what the user has entered 
     let bad = false;
-    if (input.required && String(value).trim() === "") bad = true;
+    if (input.required && String(value).trim() === "") bad = true;// ifstatement 
     if (input.type === "number" && value !== "") {
-      const n = Number(value);
+      const n = Number(value);// convert the sting into the number 
       const min = input.min === "" ? -Infinity : Number(input.min);
       const max = input.max === "" ? Infinity : Number(input.max);
       if (!Number.isFinite(n) || n < min || n > max) bad = true;
@@ -1055,7 +1062,7 @@ function bindStep(step) {
       appState.assessment.electricity = {
         kwh: Number(data.get("kwh")),
         people: Number(data.get("people")),
-        renewable: data.get("renewable") === "yes",
+        renewable: data.get("renewable") === "yes",// boolean datatype 
       };
       saveState();
       wizard.dir = "forward"; wizard.step = 2; showStep();
@@ -1316,6 +1323,10 @@ function calculateResults() {
     projected,
   };
   saveState();
+  // ---- History hook (added): saves the COMPLETED assessment to the
+  // logged-in user's history in localStorage. Runs only after results
+  // exist, so incomplete assessments are never saved. No new math here.
+  if (typeof window.saveEcoTrackHistory === "function") window.saveEcoTrackHistory(appState);
   return appState.results;
 }
 

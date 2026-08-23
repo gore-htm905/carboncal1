@@ -902,19 +902,28 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
   background: #fff;
 }
 .fl-field.has-value { border-color: rgba(15, 157, 110, 0.35); }
+/* SVG field icons live in their own tinted chip in the left gutter.
+   Label + input text are padded past the chip, so the icon can NEVER
+   overlap placeholder text, typed values or dropdown arrows.
+   Applies uniformly to Transport / Electricity / Waste fields. */
 .fl-icon {
   position: absolute;
-  left: 1.05rem; top: 50%;
+  left: 0.6rem; top: 50%;
   transform: translateY(-50%);
-  color: var(--color-text-muted);
-  transition: color 0.25s ease;
+  width: 2.15rem; height: 2.15rem;
+  display: grid; place-items: center;
+  border-radius: 10px;
+  background: var(--color-brand-tint);
+  color: var(--color-brand);
+  transition: color 0.25s ease, background-color 0.25s ease;
   pointer-events: none;
   z-index: 2;
 }
-.fl-field:focus-within .fl-icon { color: var(--color-brand); }
+.fl-field:focus-within .fl-icon { background: #DFF0E7; }
 .fl-input {
   width: 100%;
-  padding: 1.5rem 2.6rem 0.55rem 1.05rem;
+  /* left padding clears the icon chip (chip ends at ~2.75rem) */
+  padding: 1.5rem 2.6rem 0.55rem 3.3rem;
   font-family: var(--font-body);
   font-size: 0.98rem;
   color: var(--color-text);
@@ -930,7 +939,8 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
 .fl-input option { color: var(--color-text); background: #fff; }
 .fl-label {
   position: absolute;
-  left: 1.05rem; top: 50%;
+  /* starts after the icon chip — never overlaps the SVG */
+  left: 3.3rem; top: 50%;
   transform: translateY(-50%);
   font-size: 0.96rem;
   color: var(--color-text-muted);
@@ -960,7 +970,7 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
 .field.invalid .fl-field { border-color: var(--color-danger); }
 .field.invalid .fl-field:focus-within { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.18); }
 .field.invalid .fl-label { color: var(--color-danger); }
-.field.invalid .fl-icon { color: var(--color-danger); }
+.field.invalid .fl-icon { color: var(--color-danger); background: var(--color-danger-tint); }
 .field.invalid .field-error { display: block; }
 .field.shake { animation: shake 0.4s ease; }
 @keyframes shake {
@@ -1438,4 +1448,106 @@ fieldset { border: none; min-width: 0; padding: 0; margin: 0; }
   *, *::before, *::after { animation-duration: 0.001s !important; transition-duration: 0.001s !important; }
   html { scroll-behavior: auto; }
   .reveal, .reveal-left, .reveal-right, .reveal-scale, .reveal-zoom { opacity: 1; transform: none; }
+}
+
+/* ============================================================
+   Ambient page background (fills previously empty areas)
+   Layer order: bg-decor (z-index -1) -> page -> cards -> fields -> buttons.
+   Purely decorative: pointer-events none, sits behind ALL content,
+   never overlaps form fields or text. Reuses existing EcoTrack
+   green identity + blobShift / sway / rise animations.
+   ============================================================ */
+.bg-decor {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* Very subtle repeating eco pattern: faint leaf outlines + soft rings */
+.bg-decor::before {
+  content: '';
+  position: absolute;
+  inset: -80px;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='240'%20height='240'%20viewBox='0%200%20240%20240'%3E%3Cg%20fill='none'%20stroke='%230F9D6E'%20stroke-width='1.5'%3E%3Cpath%20stroke-opacity='.06'%20d='M36%2054c8-16%2026-22%2044-20%202%2018-5%2035-21%2044-16-9-21-13-23-24z'/%3E%3Cpath%20stroke-opacity='.05'%20d='M44%2048c7%207%2010%2015%2010%2026'/%3E%3Ccircle%20stroke-opacity='.045'%20cx='168'%20cy='84'%20r='17'/%3E%3Ccircle%20stroke-opacity='.04'%20cx='196'%20cy='198'%20r='9'/%3E%3Cpath%20stroke-opacity='.055'%20d='M96%20178c6-12%2020-17%2033-15%201%2013-4%2026-16%2033-12-7-15-9-17-18z'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 240px 240px;
+  mask-image: linear-gradient(180deg, rgba(0,0,0,0.9), rgba(0,0,0,0.35) 60%, rgba(0,0,0,0.75));
+  -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,0.9), rgba(0,0,0,0.35) 60%, rgba(0,0,0,0.75));
+}
+/* Soft gradient blobs (same language as hero blobs, dimmer) */
+.bg-d-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.4;
+}
+.bg-d-blob-a {
+  width: 480px; height: 480px; top: -170px; left: -150px;
+  background: radial-gradient(circle at 30% 30%, rgba(15, 157, 110, 0.45), rgba(15, 157, 110, 0) 70%);
+  animation: blobShift 18s ease-in-out infinite;
+}
+.bg-d-blob-b {
+  width: 420px; height: 420px; bottom: -190px; right: -140px;
+  background: radial-gradient(circle at 60% 40%, rgba(245, 165, 36, 0.28), rgba(245, 165, 36, 0) 70%);
+  animation: blobShift 24s ease-in-out infinite reverse;
+}
+.bg-d-blob-c {
+  width: 340px; height: 340px; top: 42%; left: -180px;
+  background: radial-gradient(circle at 50% 50%, rgba(45, 190, 142, 0.26), rgba(45, 190, 142, 0) 70%);
+  animation: blobShift 28s ease-in-out infinite;
+}
+/* Thin abstract circular elements */
+.bg-d-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1.5px solid rgba(15, 157, 110, 0.10);
+}
+.bg-d-ring-1 {
+  width: 260px; height: 260px; top: 14%; right: 6%;
+  animation: driftSlow 26s ease-in-out infinite;
+}
+.bg-d-ring-1::after {
+  content: '';
+  position: absolute; inset: 34px;
+  border-radius: 50%;
+  border: 1px dashed rgba(15, 157, 110, 0.09);
+}
+.bg-d-ring-2 {
+  width: 380px; height: 380px; bottom: 10%; left: 4%;
+  border-color: rgba(245, 165, 36, 0.09);
+  animation: driftSlow 32s ease-in-out infinite reverse;
+}
+@keyframes driftSlow {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-22px, 26px); }
+}
+/* Small floating organic dots */
+.bg-d-dot {
+  position: absolute;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(15, 157, 110, 0.55), rgba(15, 157, 110, 0) 72%);
+  opacity: 0.35;
+}
+.bg-d-dot-1 { top: 26%; left: 88%; animation: rise 13s ease-in-out infinite; }
+.bg-d-dot-2 { top: 64%; left: 94%; animation: rise 17s ease-in-out infinite 3s; }
+/* Faint large leaves drifting with the existing sway keyframe */
+.bg-decor .leaf { color: rgba(15, 157, 110, 0.14); z-index: 0; }
+.bg-d-leaf-1 { top: 9%; left: 78%; }
+.bg-d-leaf-2 { top: 46%; left: 3%; }
+.bg-d-leaf-3 { bottom: 7%; right: 14%; }
+/* Soft horizontal glow band near the fold */
+.bg-d-glow {
+  position: absolute;
+  left: 50%; top: 58%;
+  width: min(900px, 90vw); height: 320px;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at center, rgba(45, 190, 142, 0.10), rgba(45, 190, 142, 0) 68%);
+  filter: blur(24px);
+}
+@media (max-width: 768px) {
+  .bg-d-blob-c, .bg-d-ring-2, .bg-d-dot-2, .bg-d-leaf-2 { display: none; }
+  .bg-d-blob-a { width: 320px; height: 320px; }
+  .bg-d-blob-b { width: 280px; height: 280px; }
+  .bg-d-glow { height: 220px; }
 }

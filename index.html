@@ -11,8 +11,25 @@
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="styles.css" />
+    <!-- Login / registration system styles (auth pages + navbar Login-Logout widgets) -->
+    <link rel="stylesheet" href="login.css" />
 </head>
 <body>
+    <!-- Ambient decorative background — stays behind ALL content (z-index: -1) -->
+    <div class="bg-decor" aria-hidden="true">
+        <div class="bg-d-blob bg-d-blob-a"></div>
+        <div class="bg-d-blob bg-d-blob-b"></div>
+        <div class="bg-d-blob bg-d-blob-c"></div>
+        <span class="bg-d-ring bg-d-ring-1"></span>
+        <span class="bg-d-ring bg-d-ring-2"></span>
+        <span class="bg-d-dot bg-d-dot-1"></span>
+        <span class="bg-d-dot bg-d-dot-2"></span>
+        <span class="leaf bg-d-leaf-1" style="--rot:-18deg"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg></span>
+        <span class="leaf bg-d-leaf-2" style="--rot:24deg"><svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg></span>
+        <span class="leaf bg-d-leaf-3" style="--rot:12deg"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg></span>
+        <div class="bg-d-glow"></div>
+    </div>
+
     <nav class="navbar" id="navbar">
         <div class="nav-left">
             <span class="logo" aria-hidden="true">
@@ -28,11 +45,23 @@
             <li><a href="#about" class="nav-link" data-route="about">About</a></li>
             <li><a href="#how" class="nav-link" data-route="how">How it works</a></li>
             <li><a href="#calculator" class="nav-link" data-route="calculator">Calculator</a></li>
+            <!-- History page link: shown only when a user is logged in (auth-ui.js) -->
+            <li data-auth-history hidden><a href="history.html" class="nav-link">History</a></li>
             <li><a href="#resources" class="nav-link" data-route="resources">Resources</a></li>
             <li><a href="#methodology" class="nav-link" data-route="methodology">Methodology</a></li>
             <li><a href="#contact" class="nav-link" data-route="contact">Contact</a></li>
             <li class="nav-mobile-cta"><a href="#calculator" class="btn btn-primary btn-sm">Start assessment</a></li>
         </ul>
+        <!-- Auth area: Login button (logged out) / Welcome chip + Logout (logged in).
+             Updated by auth-ui.js — does not affect existing navbar behaviour. -->
+        <div class="nav-auth" id="nav-auth">
+            <span class="nav-user-chip" data-auth-user hidden>
+                <span class="nav-user-avatar" data-auth-avatar>U</span>
+                <span class="nav-user-welcome"><span class="nav-user-hello">Welcome,</span> <b data-auth-name>User</b></span>
+            </span>
+            <a href="login.html" class="btn btn-ghost btn-sm nav-auth-btn" data-auth-login>Login</a>
+            <button type="button" class="btn btn-primary btn-sm nav-auth-btn" data-auth-logout hidden>Logout</button>
+        </div>
         <a href="#calculator" class="btn btn-primary nav-desktop-cta">Start assessment <span class="btn-arrow" aria-hidden="true">→</span></a>
     </nav>
 
@@ -91,5 +120,7 @@
     </footer>
 
     <script src="script.js"></script>
+    <!-- Login system UI: welcome message + Login/Logout toggle in the navbar -->
+    <script src="auth-ui.js"></script>
 </body>
 </html>
