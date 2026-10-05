@@ -153,20 +153,14 @@ function initPasswordEyes() {
 const registerForm = document.getElementById("register-form");
 
 if (registerForm) {
-  registerForm.addEventListener("submit", function (e) {
-    e.preventDefault(); // stop the browser's default submit
+  registerForm.addEventListener("submit", async function (e) {
+    e.preventDefault();
 
-    // ---- Collect values into an OBJECT (key: value pairs) ----
     const name = document.getElementById("reg-name").value.trim();
     const email = document.getElementById("reg-email").value.trim().toLowerCase();
     const password = document.getElementById("reg-password").value;
     const confirm = document.getElementById("reg-confirm").value;
 
-    const users = getUsers(); // array of existing accounts
-
-    // ---- Array of field definitions (array of objects) ----
-    // Each entry knows how to validate itself and returns an error
-    // message (string) or null when the value is acceptable.
     const fields = [
       { id: "reg-name", errorId: "reg-name-error",
         validate: function () {
@@ -177,8 +171,6 @@ if (registerForm) {
         validate: function () {
           if (!email) return "Please enter your email.";
           if (!isValidEmail(email)) return "Please enter a valid email address.";
-          // Duplicate check uses the WHILE-loop search above.
-          if (findUserByEmail(users, email)) return "This email is already registered. Try logging in.";
           return null;
         } },
       { id: "reg-password", errorId: "reg-password-error",
@@ -198,15 +190,11 @@ if (registerForm) {
     ];
 
     let firstInvalid = null;
-
-    // DO-WHILE LOOP - validates registration fields at least once
-    // A do...while ALWAYS runs its body one time, guaranteeing that
-    // every field is checked even before any condition is evaluated.
     let fIndex = 0;
     do {
       const field = fields[fIndex];
       const inputEl = document.getElementById(field.id);
-      const message = field.validate();          // run this field's rule
+      const message = field.validate();
       if (message) {
         setFieldError(inputEl, field.errorId, message);
         if (!firstInvalid) firstInvalid = inputEl;
@@ -216,28 +204,40 @@ if (registerForm) {
       fIndex++;
     } while (fIndex < fields.length);
 
-    // If anything failed, focus the first invalid input and stop here.
     if (firstInvalid) {
       firstInvalid.focus();
       showAlert("error", "Please fix the highlighted fields and try again.");
       return;
     }
 
-    // ---- Create the new account object via the class ----
-    const newUser = new UserAccount(name, email, password);
-    users.push(newUser);            // array method push()
-    saveUsers(users);               // persist to localStorage
+    if (!window.ecoTrackSupabase) {
+      showAlert("error", "Supabase client not initialized.");
+      return;
+    }
 
-    // Success feedback, then send the user to the login page with the
-    // email prefilled so they can log in immediately.
     const btn = document.getElementById("register-submit");
     btn.disabled = true;
+    btn.textContent = "Creating account...";
+
+    const { data, error } = await window.ecoTrackSupabase.auth.signUp({
+      email: email,
+      password: password,
+      options: {
+        data: { full_name: name }
+      }
+    });
+
+    if (error) {
+      showAlert("error", "<b>Registration failed.</b> " + error.message);
+      btn.disabled = false;
+      btn.textContent = "Create account";
+      return;
+    }
+
     btn.textContent = "Account created ✓";
     showAlert("success", "<b>Registration successful!</b> Redirecting you to login…");
-
     setTimeout(function () {
-      window.location.href =
-        "login.html?registered=1&email=" + encodeURIComponent(newUser.email);
+      window.location.href = "login.html?registered=1&email=" + encodeURIComponent(email);
     }, 900);
   });
 }
@@ -248,7 +248,7 @@ if (registerForm) {
 const loginForm = document.getElementById("login-form");
 
 if (loginForm) {
-  loginForm.addEventListener("submit", function (e) {
+  loginForm.addEventListener("submit", async function (e) {
     e.preventDefault();
 
     const email = document.getElementById("login-email").value.trim().toLowerCase();
@@ -256,7 +256,6 @@ if (loginForm) {
     const emailInput = document.getElementById("login-email");
     const passwordInput = document.getElementById("login-password");
 
-    // ---- Basic presence/format checks (conditions) ----
     let hasError = false;
     if (!email) {
       setFieldError(emailInput, "login-email-error", "Please enter your email.");
@@ -275,36 +274,33 @@ if (loginForm) {
     }
     if (hasError) return;
 
-    // ---- Credential check against stored users ----
-    const users = getUsers();
-    const found = findUserByEmail(users, email); // WHILE LOOP search happens inside
-
-    if (!found) {
-      // Wrong email case
-      setFieldError(emailInput, "login-email-error", "No account found with this email.");
-      showAlert("error", "<b>Login failed.</b> No account exists with that email. Please register first.");
+    if (!window.ecoTrackSupabase) {
+      showAlert("error", "Supabase client not initialized.");
       return;
     }
 
-    if (found.password !== password) {
-      // Wrong password case
-      setFieldError(passwordInput, "login-password-error", "Incorrect password.");
-      showAlert("error", "<b>Login failed.</b> The password you entered is incorrect.");
+    const btn = document.getElementById("login-submit");
+    btn.disabled = true;
+    btn.textContent = "Logging in...";
+
+    const { data, error } = await window.ecoTrackSupabase.auth.signInWithPassword({
+      email: email,
+      password: password,
+    });
+
+    if (error) {
+      showAlert("error", "<b>Login failed.</b> " + error.message);
+      btn.disabled = false;
+      btn.textContent = "Login";
       return;
     }
-
-    // ---- Success: store the session, then go to the site ----
-    setCurrentUser({ name: found.name, email: found.email });
 
     // Start a FRESH assessment session for this user (removes any draft
     // state left over from another visitor of this browser).
     localStorage.removeItem("ecoTrack_v1");
 
-    const btn = document.getElementById("login-submit");
-    btn.disabled = true;
     btn.textContent = "Login successful ✓";
 
-    // Optional ?next=history support (arriving from the History page guard).
     const params = new URLSearchParams(window.location.search);
     const next = params.get("next");
     setTimeout(function () {

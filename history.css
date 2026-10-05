@@ -138,7 +138,7 @@ code { font-family: 'IBM Plex Mono', monospace; }
 
 /* Stats strip */
 .hist-stats {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1rem;
   margin-bottom: 1.8rem;
 }
 .hist-stat {
@@ -258,4 +258,37 @@ code { font-family: 'IBM Plex Mono', monospace; }
   .hist-grade { margin-left: 0; }
   .hist-chip small .hist-hello { display: none; }
   .hist-topbar { flex-wrap: wrap; }
+}
+
+/* ---- Data-layer states --------------------------------------------
+   Added for the Supabase-backed history page: a load failure must
+   say so rather than showing an empty list that looks like "no data",
+   and long lists get a heading between sections.                       */
+
+.hist-error {
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  border-left: 4px solid #EF6351;
+  border-radius: var(--et-radius);
+  color: #991B1B;
+  padding: 1rem 1.2rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.95rem;
+}
+
+.hist-section-head {
+  margin: 2.25rem 0 1rem;
+  grid-column: 1 / -1;
+}
+.hist-section-head:first-child { margin-top: 0; }
+.hist-section-head h2 {
+  font-family: var(--et-font-display);
+  font-size: 1.2rem;
+  color: var(--et-text);
+  margin: 0 0 0.25rem;
+}
+.hist-section-head p {
+  color: var(--et-text-secondary);
+  font-size: 0.9rem;
+  margin: 0;
 }

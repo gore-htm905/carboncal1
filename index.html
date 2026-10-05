@@ -10,6 +10,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-client.js"></script>
+    <script src="eco-data.js"></script>
     <link rel="stylesheet" href="styles.css" />
     <!-- Login / registration system styles (auth pages + navbar Login-Logout widgets) -->
     <link rel="stylesheet" href="login.css" />
@@ -45,6 +49,7 @@
             <li><a href="#about" class="nav-link" data-route="about">About</a></li>
             <li><a href="#how" class="nav-link" data-route="how">How it works</a></li>
             <li><a href="#calculator" class="nav-link" data-route="calculator">Calculator</a></li>
+            <li data-auth-dashboard hidden><a href="#dashboard" class="nav-link" data-route="dashboard">Daily Streak</a></li>
             <!-- History page link: shown only when a user is logged in (auth-ui.js) -->
             <li data-auth-history hidden><a href="history.html" class="nav-link">History</a></li>
             <li><a href="#resources" class="nav-link" data-route="resources">Resources</a></li>

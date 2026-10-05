@@ -54,12 +54,12 @@ const TRANSPORT_ZERO = 0;          // bicycle / walking
 
 const TRANSPORT_FACTORS = {
   car: { petrol: TRANSPORT_PETROL, diesel: TRANSPORT_DIESEL, cng: TRANSPORT_CNG, electric: TRANSPORT_ELECTRIC },
-  bike: { petrol: TRANSPORT_MOTORBIKE, diesel: TRANSPORT_MOTORBIKE, cng: TRANSPORT_MOTORBIKE, electric: TRANSPORT_ELECTRIC },
-  bus: TRANSPORT_BUS,
-  train: TRANSPORT_RAIL,
-  metro: TRANSPORT_RAIL,
-  bicycle: TRANSPORT_ZERO,
-  walking: TRANSPORT_ZERO,
+  bike: { petrol: TRANSPORT_MOTORBIKE, electric: TRANSPORT_ELECTRIC },
+  bus: { diesel: TRANSPORT_BUS, cng: TRANSPORT_BUS, electric: TRANSPORT_BUS },
+  train: { diesel: TRANSPORT_RAIL, electric: TRANSPORT_RAIL },
+  metro: { electricity: TRANSPORT_RAIL },
+  bicycle: { none: TRANSPORT_ZERO },
+  walking: { none: TRANSPORT_ZERO },
 };
 
 // Electricity — kg CO2e per kWh.
@@ -177,6 +177,7 @@ function icon(name, size = 20) {
     mountain: '<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>',
     fuel: '<path d="M3 22h12"/><path d="M4 22V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16"/><path d="M14 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-2.5-2.5"/><path d="M9 8v3"/><path d="M7 22h6"/>',
     flask: '<path d="M10 2v6.5L4.42 18.5A2 2 0 0 0 6.21 22h11.58a2 2 0 0 0 1.79-3.5L14 8.5V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/>',
+    flame: '<path d="M12 2c1 3 3.5 4.5 3.5 8a3.5 3.5 0 0 1-7 0c0-1.2.5-2.2 1.2-3.2C8.5 9 6.5 11.6 6.5 14.5a5.5 5.5 0 0 0 11 0C17.5 9.6 14.5 5.5 12 2Z"/><path d="M12 22a2.5 2.5 0 0 0 2.5-2.5c0-1.6-2.5-3.5-2.5-3.5S9.5 17.9 9.5 19.5A2.5 2.5 0 0 0 12 22Z"/>',
   };
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || ""}</svg>`;
 }
@@ -319,6 +320,8 @@ const routes = {
   "#about": renderAbout,
   "#how": renderHowItWorks,
   "#calculator": renderCalculator,
+  "#result": renderDashboard,
+  "#dashboard": () => { if (window.renderStreakDashboard) window.renderStreakDashboard(); },
   "#resources": renderResources,
   "#methodology": renderMethodology,
   "#contact": renderContact,
@@ -386,7 +389,7 @@ function tlStep(n, side, ic, title, desc) {
   </div>`;
 }
 
-function renderHome() {
+async function renderHome() {
   const html = `
   <section class="hero">
     <div class="hero-bg" aria-hidden="true">
@@ -420,19 +423,19 @@ function renderHome() {
         <div class="hero-glow"></div>
         <div class="float-card fc-grade">
           <div class="fc-icon">${icon("trophy", 20)}</div>
-          <div><div class="fc-value">Grade <b>A</b></div><div class="fc-label">Eco Grade</div></div>
+          <div><div class="fc-value">Grade <b id="home-grade">?</b></div><div class="fc-label">Eco Grade</div></div>
         </div>
         <div class="float-card fc-saved">
           <div class="fc-icon">${icon("leaf", 20)}</div>
-          <div><div class="fc-value"><span data-countup-target="348220">0</span> kg</div><div class="fc-label">CO₂e saved this month</div></div>
+          <div><div class="fc-value"><span id="home-saved-monthly" data-countup-target="0">0</span> kg</div><div class="fc-label">CO₂e saved this month</div></div>
         </div>
         <div class="float-card fc-members">
           <div class="fc-icon">${icon("users", 20)}</div>
-          <div><div class="fc-value"><span data-countup-target="12847">0</span></div><div class="fc-label">Community members</div></div>
+          <div><div class="fc-value"><span id="home-members-count-1" data-countup-target="0">0</span></div><div class="fc-label">Community members</div></div>
         </div>
         <div class="float-card fc-reduction">
           <div class="fc-icon">${icon("trendDown", 20)}</div>
-          <div><div class="fc-value"><span data-countup-target="38">0</span>%</div><div class="fc-label">Monthly reduction</div></div>
+          <div><div class="fc-value"><span id="home-reduction" data-countup-target="0">0</span>%</div><div class="fc-label">Monthly reduction</div></div>
         </div>
       </div>
     </div>
@@ -445,12 +448,12 @@ function renderHome() {
         </div>
         <div class="impact-stat reveal reveal-up" style="transition-delay:90ms">
           <div class="impact-icon">${icon("trendDown", 22)}</div>
-          <div class="impact-num" data-countup-target="38">0</div>
+          <div class="impact-num" id="home-potential-reduction" data-countup-target="0">0</div>
           <div class="impact-lbl">% potential reduction with EcoTrack habits</div>
         </div>
         <div class="impact-stat reveal reveal-up" style="transition-delay:180ms">
           <div class="impact-icon">${icon("users", 22)}</div>
-          <div class="impact-num" data-countup-target="12847">0</div>
+          <div class="impact-num" id="home-members-count-2" data-countup-target="0">0</div>
           <div class="impact-lbl">community members tracking this month</div>
         </div>
       </div>
@@ -519,6 +522,31 @@ function renderHome() {
   </section>
   `;
   setAppHtml(html);
+
+  // Community figures come straight from the server, so they are real
+  // and identical for everyone. Until the call resolves the tiles keep
+  // the "0" placeholder already in the markup — no placeholder guesses.
+  const community = window.EcoData ? await window.EcoData.getCommunityStats() : null;
+  const membersCount = Number(community?.community_members) || 0;
+  const savedMonthly = Number(community?.co2e_saved_this_month) || 0;
+
+  const elMem1 = document.getElementById("home-members-count-1");
+  const elMem2 = document.getElementById("home-members-count-2");
+  const elSaved = document.getElementById("home-saved-monthly");
+  if (elMem1) elMem1.setAttribute("data-countup-target", membersCount);
+  if (elMem2) elMem2.setAttribute("data-countup-target", membersCount);
+  if (elSaved) elSaved.setAttribute("data-countup-target", Number(savedMonthly.toFixed(1)));
+
+  if (appState.results) {
+    const gradeEl = document.getElementById("home-grade");
+    const redEl = document.getElementById("home-reduction");
+    const potRedEl = document.getElementById("home-potential-reduction");
+    if (gradeEl) gradeEl.textContent = appState.results.grade;
+    const reduction = Math.max(0, Math.round((appState.results.projected.saved / appState.results.totalKg) * 100)) || 0;
+    if (redEl) redEl.setAttribute("data-countup-target", reduction);
+    if (potRedEl) potRedEl.setAttribute("data-countup-target", reduction);
+  }
+
   initPageEffects(document.getElementById("app"));
   initTimelineFill();
 }
@@ -759,11 +787,10 @@ const STEP_META = [
   { name: "Waste", icon: "trash", tip: "If in doubt, pick Medium. Recycling can cut your waste line by up to 40%." },
 ];
 
-function renderCalculator() {
+async function renderCalculator() {
   // ---- Auth guard (added): starting an assessment requires login. ----
-  // Logged-out users see a message and are redirected to login.html.
-  // Returns false without rendering anything — flow/formulas untouched.
   if (typeof window.ecoTrackRequireLogin === "function" && !window.ecoTrackRequireLogin()) return;
+
   wizard.step = 0;
   const html = `
   <section class="calc-section">
@@ -871,29 +898,70 @@ function stepHtml(step) {
       <div class="field">
         <div class="fl-field select">
           <div class="fl-icon">${icon("car", 18)}</div>
-          <select class="fl-input" id="mode" name="mode" required>
+          <select class="fl-input" id="usage" name="usage" required onchange="
+            const modeSel = document.getElementById('mode');
+            modeSel.innerHTML = '<option value=\\'\\' selected disabled></option>';
+            if(this.value === 'private') {
+              modeSel.innerHTML += '<option value=\\'car\\'>Car</option><option value=\\'bike\\'>Motorbike</option><option value=\\'bicycle\\'>Bicycle</option><option value=\\'walking\\'>Walking</option>';
+            } else if(this.value === 'public') {
+              modeSel.innerHTML += '<option value=\\'bus\\'>Bus</option><option value=\\'train\\'>Train</option><option value=\\'metro\\'>Metro</option>';
+            }
+            modeSel.value = '';
+            document.getElementById('fuel').innerHTML = '<option value=\\'\\' selected disabled></option>';
+            document.getElementById('fuel').closest('.field').style.display = 'none';
+          ">
             <option value="" selected disabled></option>
-            <option value="car">Car</option>
-            <option value="bike">Motorbike</option>
-            <option value="bus">Bus</option>
-            <option value="train">Train</option>
-            <option value="metro">Metro</option>
-            <option value="bicycle">Bicycle</option>
-            <option value="walking">Walking</option>
+            <option value="private">Private</option>
+            <option value="public">Public</option>
+          </select>
+          <label class="fl-label" for="usage">How do you usually travel?</label>
+        </div>
+        <p class="field-error">Please choose Private or Public.</p>
+      </div>
+      <div class="field">
+        <div class="fl-field select">
+          <div class="fl-icon">${icon("car", 18)}</div>
+          <select class="fl-input" id="mode" name="mode" required onchange="
+            const fuelSel = document.getElementById('fuel');
+            const fuelWrap = fuelSel.closest('.field');
+            fuelSel.innerHTML = '<option value=\\'\\' selected disabled></option>';
+            if(['car'].includes(this.value)) {
+              fuelSel.innerHTML += '<option value=\\'petrol\\'>Petrol</option><option value=\\'diesel\\'>Diesel</option><option value=\\'cng\\'>CNG</option><option value=\\'electric\\'>Electric</option>';
+              fuelWrap.style.display = 'block';
+              fuelSel.required = true;
+            } else if(['bike'].includes(this.value)) {
+              fuelSel.innerHTML += '<option value=\\'petrol\\'>Petrol</option><option value=\\'electric\\'>Electric</option>';
+              fuelWrap.style.display = 'block';
+              fuelSel.required = true;
+            } else if(['bus'].includes(this.value)) {
+              fuelSel.innerHTML += '<option value=\\'diesel\\'>Diesel</option><option value=\\'cng\\'>CNG</option><option value=\\'electric\\'>Electric</option>';
+              fuelWrap.style.display = 'block';
+              fuelSel.required = true;
+            } else if(['train'].includes(this.value)) {
+              fuelSel.innerHTML += '<option value=\\'diesel\\'>Diesel</option><option value=\\'electric\\'>Electric</option>';
+              fuelWrap.style.display = 'block';
+              fuelSel.required = true;
+            } else if(['metro'].includes(this.value)) {
+              fuelSel.innerHTML += '<option value=\\'electricity\\'>Electricity</option>';
+              fuelWrap.style.display = 'block';
+              fuelSel.required = true;
+            } else {
+              fuelSel.innerHTML += '<option value=\\'none\\' selected>No Fuel</option>';
+              fuelWrap.style.display = 'none';
+              fuelSel.required = false;
+            }
+          ">
+            <option value="" selected disabled></option>
           </select>
           <label class="fl-label" for="mode">Mode of transport</label>
         </div>
         <p class="field-error">Please choose a mode.</p>
       </div>
-      <div class="field">
+      <div class="field" style="display: none;">
         <div class="fl-field select">
           <div class="fl-icon">${icon("fuel", 18)}</div>
-          <select class="fl-input" id="fuel" name="fuel" required>
+          <select class="fl-input" id="fuel" name="fuel">
             <option value="" selected disabled></option>
-            <option value="petrol">Petrol</option>
-            <option value="diesel">Diesel</option>
-            <option value="cng">CNG</option>
-            <option value="electric">Electric</option>
           </select>
           <label class="fl-label" for="fuel">Fuel type (if applicable)</label>
         </div>
@@ -1072,10 +1140,21 @@ function bindStep(step) {
         recycle: data.get("recycle") === "yes",
       };
       saveState();
-      calculateResults();
+      // Persisting the assessment to Supabase now happens inside
+      // calculateResults() (via eco-data.js), so this is the only place
+      // the wizard produces final numbers — no second insert here.
+      
+      // Render skeleton while awaiting calculateResults
       renderResultsSkeleton();
       scrollTop();
-      setTimeout(renderDashboard, 650);
+      
+      calculateResults().then((results) => {
+        if (!results) {
+          devWarn("Results were not produced; staying on the last step.");
+          return;
+        }
+        setTimeout(() => { location.hash = "#result"; }, 650);
+      });
     }
   });
 }
@@ -1118,8 +1197,14 @@ function renderResultsSkeleton() {
 function transportFactor(mode, fuel) {
   const m = TRANSPORT_FACTORS[mode];
   if (!m) return 0;
-  if (typeof m === "number") return m;
-  return fuel && m[fuel] != null ? m[fuel] : m.petrol || 0;
+  
+  if (fuel && m[fuel] !== undefined) {
+    return m[fuel];
+  }
+  
+  // Validation check: If fuel doesn't match the valid options, reject calculation
+  console.warn("Invalid transport + fuel combination:", mode, fuel);
+  return 0;
 }
 function transportMonthly(t) {
   const factor = transportFactor(t.mode, t.fuel);
@@ -1265,7 +1350,7 @@ function projectScore(totalMonthly, recommendations) {
   };
 }
 
-function calculateResults() {
+async function calculateResults() {
   const a = appState.assessment;
   const t = a.transport, e = a.electricity, w = a.waste;
 
@@ -1321,12 +1406,28 @@ function calculateResults() {
     equivalents,
     recommendations,
     projected,
+    saveFailed: false, // Default to false
   };
   saveState();
-  // ---- History hook (added): saves the COMPLETED assessment to the
-  // logged-in user's history in localStorage. Runs only after results
-  // exist, so incomplete assessments are never saved. No new math here.
-  if (typeof window.saveEcoTrackHistory === "function") window.saveEcoTrackHistory(appState);
+  // ---- Persist to the signed-in user's account. Runs only once all
+  // three categories have produced real numbers, so a half-finished
+  // assessment is never stored. Values are passed through unchanged —
+  // the maths above is still the only source of these numbers.
+  if (window.EcoData) {
+    try {
+      const saved = await window.EcoData.saveAssessment(appState.assessment, appState.results);
+      if (saved) {
+        console.log("EcoTrack: assessment saved for this account.");
+      } else {
+        console.warn("EcoTrack: assessment was not saved (no active session?).");
+        appState.results.saveFailed = true;
+      }
+    } catch (err) {
+      console.error("EcoTrack: could not save the assessment.", err);
+      appState.results.saveFailed = true;
+    }
+    saveState();
+  }
   return appState.results;
 }
 
@@ -1756,9 +1857,42 @@ function kpi(iconName, valueHtml, label, cls) {
   </div>`;
 }
 
-function renderDashboard() {
+async function renderDashboard() {
   const r = appState.results;
   if (!r) { devWarn("renderDashboard() called with no results."); renderCalculator(); return; }
+  
+  // Phase 9 & 10: Fetch Streak and Challenge data asynchronously
+  let streakHtml = "";
+  let challengeHtml = "";
+  let ctaHtml = "";
+
+  // Fetch the streak to decide whether to show the CTA. The streak row
+  // itself is created automatically by the server, so "does this row
+  // exist" is no longer a useful test — the meaningful one is whether
+  // any challenge has been completed yet.
+  if (window.EcoData && (await window.EcoData.isSignedIn())) {
+    try {
+      const dash = await window.EcoData.getDashboard();
+      const completed = Number(dash?.streak?.challenges_completed) || 0;
+      if (completed === 0) {
+        // No challenge completed yet, show CTA
+        ctaHtml = `
+          <!-- Start Streak CTA -->
+          <section class="streak-cta" id="streak-cta" style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;padding:2rem;text-align:center;margin-bottom:2rem;" class="reveal reveal-up">
+            <h2>Ready to start your carbon-saving journey?</h2>
+            <p style="color:var(--color-text-muted);margin-bottom:1.5rem;">Turn these insights into action! Join the daily challenge and build your conservation streak.</p>
+            <div style="display:flex;gap:1rem;justify-content:center;">
+              <button class="btn btn-primary" onclick="startStreak()">Start My Streak</button>
+              <button class="btn btn-secondary" style="background:transparent;border:1px solid var(--color-border);color:var(--color-text-secondary);padding:0.75rem 1.5rem;border-radius:8px;font-family:inherit;font-weight:600;cursor:pointer;" onclick="hideStreakCTA()">Maybe Later</button>
+            </div>
+          </section>
+        `;
+      }
+    } catch (e) {
+      // A failed stats read must not block the results page.
+      console.warn("EcoTrack: could not read the streak for the CTA.", e);
+    }
+  }
   const C = r.monthly;
   const colors = {
     transport: themeColor("--color-cat-transport", "#EF6351"),
@@ -1786,6 +1920,11 @@ function renderDashboard() {
       <span class="leaf leaf-3" style="--rot:12deg">${icon("leaf", 26)}</span>
     </div>
     <div class="container">
+      ${r.saveFailed ? `
+      <div style="background:#FDECEC;color:#B91C1C;border:1px solid #F5B5B5;border-radius:12px;padding:1rem;margin-bottom:2rem;text-align:center;">
+        <strong>Warning: Your assessment was calculated but could not be saved to your account.</strong>
+        <p style="margin:0.5rem 0 0;font-size:0.9rem;">Check the console for details. You can view your results, but they won't appear in your History.</p>
+      </div>` : ''}
       <header class="results-hero reveal reveal-up">
         <span class="eyebrow">Assessment complete</span>
         <h1>Your <span class="text-gradient">results</span></h1>
@@ -1835,7 +1974,6 @@ function renderDashboard() {
         ${kpi("gauge", `<span data-countup-target="${r.conservationIndex.toFixed(1)}" data-decimals="1">0</span>%`, "Conservation Index", "grad-orange")}
         ${kpi("bolt", `<span data-countup-target="${r.totalKg.toFixed(1)}" data-decimals="1">0</span> kg`, "Monthly Footprint", "grad-beige")}
         ${kpi(categoryIconName(r.highestContributor.name), r.highestContributor.name, "Highest Contributor", "grad-ink")}
-        ${kpi("trendDown", r.recommendations.length ? `−<span data-countup-target="${fmt(pSaved, 1)}" data-decimals="1">0</span> kg` : "—", "Potential Reduction", "grad-green")}
         ${kpi(vsIcon, vsText, "Community Comparison", vsClass)}
       </div>
 
@@ -1874,7 +2012,7 @@ function renderDashboard() {
           <div class="rl-number" data-countup-target="${fmt(r.equivalents.treesAnnual, 0)}" data-decimals="0">0</div>
           <div class="rl-label">mature trees needed to absorb this over a year, at your current monthly rate</div>
         </div>
-      </div>
+      ${ctaHtml}
 
       <section class="rec-section" id="recommendations">
         <h2>Recommendations, ranked by monthly impact</h2>
@@ -1893,6 +2031,288 @@ function renderDashboard() {
   mountTrend(r.totalKg);
   initGradeBar();
   initPageEffects(document.getElementById("app"));
+}
+
+// ---------------------- Streak Functions ----------------------
+//
+// The streak row itself is created by the server (a trigger on
+// auth.users plus ensure_personal_rows), so starting a streak is just
+// "make sure my rows exist, then show me the dashboard".
+window.startStreak = async function() {
+  if (!window.EcoData) {
+    alert("Supabase is not initialized yet. Cannot start streak.");
+    return;
+  }
+  const user = await window.EcoData.currentUser();
+  if (!user) {
+    alert("Please log in to start your streak.");
+    window.location.href = "login.html?auth=required";
+    return;
+  }
+
+  try {
+    // Loads today's assessment, streak and challenge in one call, which
+    // also creates the profile/streak rows if they are missing.
+    await window.EcoData.getDashboard();
+  } catch (e) {
+    console.error("EcoTrack: could not initialise the streak.", e);
+    alert("Unable to start your streak because the streak data could not be saved.\n\nDetails: " + e.message);
+    return;
+  }
+
+  // Dashboard will be rendered directly via routing
+  location.hash = "#dashboard";
+};
+
+window.hideStreakCTA = function() {
+  const cta = document.getElementById("streak-cta");
+  if (cta) cta.style.display = "none";
+};
+
+// Completing a challenge sends ONLY the assignment id, exactly as the
+// server gave it to us. Nothing about the id is converted here, and no
+// streak or carbon value is touched in the browser: the RPC decides
+// everything and get_my_dashboard() reads the result back.
+//
+// This is the single completion entry point for the whole app:
+//   button -> completeDailyChallenge() -> EcoData.completeChallenge()
+//          -> complete_daily_challenge RPC -> database
+//          -> getDashboard() -> renderStreakDashboard()
+window.completeDailyChallenge = async function(assignmentId, button) {
+  // 1. Data layer present.
+  if (!window.EcoData) {
+    alert('Data layer not ready. Please refresh the page.');
+    return;
+  }
+
+  // 2. Signed in.
+  const user = await window.EcoData.currentUser();
+  if (!user) {
+    alert('Please log in to complete challenges.');
+    return;
+  }
+
+  // 3. A usable id. String()-normalised only -- never Number()/parseInt(),
+  //    which would turn a UUID into NaN and could round a large serial.
+  const id = String(assignmentId === null || assignmentId === undefined ? '' : assignmentId).trim();
+  if (!id) {
+    console.error('EcoTrack: invalid challenge ID');
+    alert('Invalid challenge.');
+    return;
+  }
+
+  // Guard against a double click while the request is in flight. The RPC
+  // is idempotent as well, so this is belt-and-braces rather than the
+  // only protection.
+  if (button) {
+    if (button.disabled) return;
+    button.disabled = true;
+    button.textContent = 'Saving…';
+  }
+
+  let result = null;
+  try {
+    result = await window.EcoData.completeChallenge(id);
+  } catch (err) {
+    console.error('EcoTrack: completeDailyChallenge failed:', err);
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Complete Challenge';
+    }
+    alert('Unable to record challenge completion.\n\nDetails: ' + (err && err.message ? err.message : 'Unknown error'));
+    return;
+  }
+
+  // Never claim success unless the server actually returned a result.
+  if (!result) {
+    console.error('EcoTrack: completeDailyChallenge failed:', result);
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Complete Challenge';
+    }
+    alert('Unable to record challenge completion.');
+    return;
+  }
+
+  if (result.already_completed) {
+    console.log('EcoTrack: challenge was already recorded today; nothing was added again.');
+  }
+
+  // Fresh data from the database drives the UI. No local arithmetic.
+  await window.renderStreakDashboard();
+};
+
+// ---------------------- Eco Streak Dashboard ----------------------
+//
+// One round trip (get_my_dashboard) returns the newest assessment, the
+// streak and today's challenge, all derived from the signed-in user's
+// own calendar day in their own timezone.
+window.renderStreakDashboard = async function() {
+  if (typeof window.ecoTrackRequireLogin === "function" && !window.ecoTrackRequireLogin()) return;
+  if (!window.EcoData) return;
+  const user = await window.EcoData.currentUser();
+  if (!user) return;
+
+  let data;
+  try {
+    data = await window.EcoData.getDashboard();
+  } catch (e) {
+    console.error('EcoTrack: could not load the streak dashboard.', e);
+    setAppHtml('<div class="container" style="padding:4rem 0"><div class="kpi-card">Could not load your streak right now. Please refresh the page.</div></div>');
+    return;
+  }
+  if (!data) {
+    renderDashboard();
+    return;
+  }
+
+  const tz = data.timezone || 'UTC';
+  const streak = data.streak || {};
+  const assessment = data.assessment || null;
+  const challenge = data.challenge || null;
+
+  const cur = Number(streak.current_streak) || 0;
+  const best = Number(streak.longest_streak) || 0;
+  const saved = Number(streak.total_carbon_saved) || 0;
+  const done = Number(streak.challenges_completed) || 0;
+
+  // ---- Today's challenge card -------------------------------------
+  let challengeCardHtml = '';
+  if (!challenge) {
+    challengeCardHtml = `<div class="kpi-card" style="grid-column: 1 / -1;">Your streak is active, but today's challenge could not be loaded. Please refresh and try again.</div>`;
+  } else if (challenge.status === 'no_assessment') {
+    challengeCardHtml = `
+      <div class="kpi-card reveal reveal-up" style="grid-column: 1 / -1; padding: 2rem;">
+        <div class="eyebrow" style="margin-bottom: 0.75rem;">TODAY'S ECO CHALLENGE</div>
+        <h3 style="margin:0 0 .5rem; font-size:1.35rem;">${challenge.message || 'Complete your assessment to receive your personalized daily goal.'}</h3>
+        <p style="margin:0; color:var(--color-text-muted);">Challenges are chosen from the area that drives your footprint, so an assessment is needed first.</p>
+        <a href="#calculator" class="btn btn-primary" style="align-self: flex-start; margin-top:1.5rem;">Start assessment <span class="btn-arrow" aria-hidden="true">→</span></a>
+      </div>`;
+  } else if (challenge.status === 'completed') {
+    const amount = Number(window.EcoData.challengeSaving(challenge) ?? challenge.carbon_saved) || 0;
+    const when = window.EcoData.prettyDateTime(challenge.completed_at, tz);
+    challengeCardHtml = `
+      <div class="kpi-card grad-beige reveal reveal-up" style="grid-column: 1 / -1; padding: 2rem;">
+        <div style="display:flex; align-items:center; gap: 1rem;">
+          <div class="kpi-icon" style="color: #2DBE8E;">${icon("checkCircle", 32)}</div>
+          <div>
+            <h3 style="margin:0; font-size:1.4rem;">Challenge completed</h3>
+            <p style="margin:0.5rem 0 0.25rem; color:var(--color-text-muted); font-size:1rem;">${challenge.title || ''}</p>
+            <p style="margin:0; font-size:1rem;">You saved <strong>${window.EcoData.num(amount, 2)} kg CO₂e</strong> · ${when}</p>
+          </div>
+        </div>
+      </div>`;
+  } else {
+    const tags = [];
+    if (challenge.difficulty) tags.push(`Difficulty: ${challenge.difficulty}`);
+    if (challenge.target_category && challenge.target_category !== challenge.category) {
+      tags.push(`Targets: ${window.EcoData.categoryLabel(challenge.target_category)}`);
+    }
+    if (challenge.target_value) tags.push(`Target: ${challenge.target_value}`);
+    tags.push(`Saving: ${window.EcoData.num(window.EcoData.challengeSaving(challenge), 2)} kg CO₂e`);
+
+    challengeCardHtml = `
+      <div class="kpi-card grad-green reveal reveal-up" style="grid-column: 1 / -1; display: flex; flex-direction: column; gap: 1.5rem; padding: 2rem;">
+        <div class="eyebrow" style="margin-bottom: 0;">TODAY'S ECO CHALLENGE</div>
+        <div style="display:flex; align-items:flex-start; gap: 1rem;">
+          <div class="kpi-icon">${icon("target", 24)}</div>
+          <div>
+            <h3 style="margin:0; font-size:1.4rem;">${challenge.title || ''}</h3>
+            ${challenge.description ? `<p style="margin:0.5rem 0 0.5rem; color:var(--color-text-muted); font-size:1rem;">${challenge.description}</p>` : ''}
+            ${challenge.action ? `<p style="margin:0 0 1rem; font-size:1rem;"><strong>Do this:</strong> ${challenge.action}</p>` : ''}
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+              ${tags.map((t) => `<span style="background: rgba(255,255,255,0.4); padding: 0.25rem 0.75rem; border-radius: 99px; font-size: 0.85rem; font-weight: 600;">${t}</span>`).join('')}
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-primary js-complete-challenge" data-challenge-id="${window.EcoData.attr(challenge.id)}" style="align-self: flex-start; margin-left: 3.5rem;">Complete Challenge</button>
+        <p style="margin:-1rem 0 0 3.5rem; font-size:0.85rem; color:var(--color-text-muted);">One challenge per day, for ${window.EcoData.prettyDate(challenge.challenge_date, tz)}.</p>
+      </div>`;
+  }
+
+  const isCompleted = !!(challenge && challenge.status === 'completed');
+  const tick = (on) => `<span style="color:${on ? '#2DBE8E' : 'var(--color-text-muted)'};">${on ? icon("checkCircle", 20) : '○'}</span>`;
+
+  const html = `
+  <section class="results-page">
+    <div class="results-bg" aria-hidden="true">
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+      <span class="leaf leaf-1" style="--rot:-18deg">${icon("leaf", 22)}</span>
+      <span class="leaf leaf-3" style="--rot:12deg">${icon("leaf", 26)}</span>
+    </div>
+    <div class="container">
+      <header class="results-hero reveal reveal-up">
+        <span class="eyebrow">Your Eco Streak 🌱</span>
+        <h1>${cur > 0 ? `${cur} day${cur === 1 ? '' : 's'} strong` : 'Your journey <span class="text-gradient">starts today</span>'}</h1>
+        <p style="color:var(--color-text-muted); max-width: 46rem; margin: 0 auto;">
+          Your streak is tracked against your local day (${tz}). Come back each day to keep it alive.
+        </p>
+      </header>
+
+      <div class="metric-grid" style="margin-bottom: 2rem;">
+        ${challengeCardHtml}
+      </div>
+
+      <div class="score-layout" style="grid-template-columns: 1fr; margin-bottom: 2rem;">
+        <div class="grade-card reveal reveal-up">
+          <div class="grade-body" style="padding: 1.5rem;">
+            <div class="grade-title" style="margin-bottom: 1rem; font-size: 1.1rem;">TODAY'S PROGRESS</div>
+            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.75rem;">
+              <li style="display:flex; align-items:center; gap: 0.75rem;">${tick(challenge && challenge.status !== 'no_assessment')} Challenge Assigned</li>
+              <li style="display:flex; align-items:center; gap: 0.75rem;">${tick(isCompleted)} Challenge Completed</li>
+              <li style="display:flex; align-items:center; gap: 0.75rem;">${tick(isCompleted)} Carbon Saved</li>
+              <li style="display:flex; align-items:center; gap: 0.75rem;">${tick(isCompleted)} Streak Updated</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <h2 style="font-size: 1.4rem; margin-bottom: 1rem; margin-top: 3rem;" class="reveal reveal-up">Your Eco Profile</h2>
+      <div class="metric-grid" style="margin-bottom: 3rem;">
+        ${assessment
+          ? kpi("chart", window.EcoData.num(assessment.monthly_footprint, 1) + " kg CO₂e", "Monthly Footprint", "")
+            + kpi("trophy", assessment.eco_grade || "—", "Eco Grade", "")
+            + kpi("trendDown", window.EcoData.categoryLabel(assessment.target_category), "Main Improvement Area", "")
+          : '<div class="kpi-card" style="grid-column: 1/-1">Complete your assessment to receive your personalized daily goal.</div>'}
+      </div>
+
+      <h2 style="font-size: 1.4rem; margin-bottom: 1rem; margin-top: 3rem;" class="reveal reveal-up">Your Impact</h2>
+      <div class="metric-grid" style="margin-bottom: 2rem;">
+        ${kpi("flame", `<span style="color:#EF6351">${cur} day${cur === 1 ? '' : 's'}</span>`, "Current Streak", "grad-orange")}
+        ${kpi("bolt", `${window.EcoData.num(saved, 1)} kg CO₂e`, "Total Carbon Saved", "grad-green")}
+        ${kpi("checkCircle", `${done}`, "Challenges Completed", "grad-beige")}
+        ${kpi("trophy", `${best} day${best === 1 ? '' : 's'}`, "Longest Streak", "grad-ink")}
+      </div>
+      <p style="text-align:center; color:var(--color-text-muted); font-size:0.9rem; margin-bottom: 4rem;">
+        <a href="history.html" style="color:inherit;">See your full history →</a>
+      </p>
+    </div>
+  </section>`;
+
+  setAppHtml(html);
+  initPageEffects(document.getElementById("app"));
+  bindCompleteChallengeButtons(document.getElementById("app"));
+};
+
+// Wires every "Complete Challenge" button inside a freshly rendered
+// dashboard. The id is read from the data attribute, exactly as the
+// server supplied it, and handed to completeDailyChallenge() unmodified.
+// Delegated from the app root so it keeps working after a re-render.
+function bindCompleteChallengeButtons(root) {
+  if (!root || typeof root.querySelectorAll !== "function") return;
+  const buttons = root.querySelectorAll(".js-complete-challenge");
+  for (let i = 0; i < buttons.length; i++) {
+    const btn = buttons[i];
+    // Guard against double-binding if the same node is seen twice.
+    if (btn.dataset && btn.dataset.etBound === "1") continue;
+    if (btn.dataset) btn.dataset.etBound = "1";
+    btn.addEventListener("click", function (e) {
+      e.preventDefault();
+      const id = btn.dataset ? btn.dataset.challengeId : "";
+      window.completeDailyChallenge(id, btn);
+    });
+  }
 }
 
 // ---------------------- Init ----------------------

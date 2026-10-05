@@ -7,6 +7,9 @@
     <title>My Assessment History – EcoTrack</title>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="history.css" />
+    <!-- Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-client.js"></script>
 </head>
 <body class="hist-body">
     <!-- Ambient decorative background — stays behind all content -->
@@ -34,30 +37,36 @@
 
     <main class="hist-main">
         <div class="hist-head">
-            <span class="hist-eyebrow">Private · Stored on this device</span>
-            <h1>My Assessment History</h1>
-            <p>Every completed carbon assessment for your account, newest first.</p>
+            <span class="hist-eyebrow">Private · Stored in your account</span>
+            <h1>My EcoTrack History</h1>
+            <p>Every carbon assessment and daily challenge on your account, newest first.</p>
         </div>
 
-        <!-- Summary strip: totals computed by history.js -->
+        <!-- Load/permission failure. Nothing is rendered rather than showing a fake number. -->
+        <p class="hist-error" id="hist-error" hidden></p>
+
+        <!-- Summary strip: totals come from your own rows -->
         <div class="hist-stats" id="hist-stats" hidden>
             <div class="hist-stat"><b id="stat-count">0</b><span>assessments completed</span></div>
             <div class="hist-stat"><b id="stat-avg">—</b><span>average monthly footprint (kg CO₂e)</span></div>
             <div class="hist-stat"><b id="stat-best">—</b><span>best Conservation Index</span></div>
+            <div class="hist-stat"><b id="stat-streak-current">0 / 0</b><span>current / longest streak</span></div>
+            <div class="hist-stat"><b id="stat-saved">—</b><span>kg CO₂e saved total</span></div>
         </div>
 
         <!-- Cards injected here by history.js -->
         <section class="hist-list" id="hist-list"></section>
 
-        <!-- Shown when the user has no saved assessments yet -->
+        <!-- Shown when the account has no saved assessments or challenges yet -->
         <section class="hist-empty" id="hist-empty" hidden>
             <svg viewBox="0 0 24 24" width="52" height="52" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>
-            <h2>No assessments yet</h2>
+            <h2>No history yet</h2>
             <p>Complete your first carbon assessment and it will appear here automatically.</p>
             <a class="hist-cta" href="index.html#calculator">Start assessment →</a>
         </section>
     </main>
 
+    <script src="eco-data.js"></script>
     <script src="history.js"></script>
 </body>
 </html>

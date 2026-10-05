@@ -1,234 +1,265 @@
 // ============================================================
-// EcoTrack — Assessment History page (frontend-only)
+// EcoTrack — Assessment History page
 // ------------------------------------------------------------
-// Responsibilities:
-//   1. LOGIN PROTECTION: redirect to login.html when no session
-//   2. Show ONLY the logged-in user's assessments (filter by email)
-//   3. Render each saved assessment (FOR LOOP)
-//   4. View Details toggle per assessment
-//   5. Delete a single assessment after confirmation
-// Data lives in localStorage under "assessmentHistory" and was
-// written automatically after each completed assessment.
+// Everything on this page comes from Postgres:
+//   * assessments  — the signed-in user's own rows, read straight from
+//     the table (RLS already restricts it to that one user).
+//   * challenges   — get_my_history() for streak totals plus the day
+//     by day challenge log.
+// Nothing is read from localStorage and nothing is invented, so an
+// empty account genuinely shows the empty state.
 // ============================================================
 
 "use strict";
 
-// ---------------------- Constants & storage helpers ----------------------
-const HIST_CURRENT_USER_KEY = "currentUser";
-const HIST_HISTORY_KEY = "assessmentHistory";
-
-function histGetCurrentUser() {
-  const raw = localStorage.getItem(HIST_CURRENT_USER_KEY);
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch (e) { return null; }
+function esc(value) {
+  return String(value === null || value === undefined ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
-function histReadAllHistory() {
-  try {
-    const raw = localStorage.getItem(HIST_HISTORY_KEY);
-    const list = raw ? JSON.parse(raw) : [];
-    return Array.isArray(list) ? list : [];
-  } catch (e) {
-    console.warn("EcoTrack history: unreadable data.", e);
-    return [];
+function setHistoryMessage(text) {
+  const el = document.getElementById("hist-message");
+  if (el) {
+    el.textContent = text || "";
+    el.hidden = !text;
   }
 }
 
-function histWriteHistory(list) {
-  localStorage.setItem(HIST_HISTORY_KEY, JSON.stringify(list));
+// Show or clear the load-failure banner. Called on every path so a stale
+// error can never sit above a list that actually loaded fine.
+function setHistoryError(text) {
+  const el = document.getElementById("hist-error");
+  if (!el) return;
+  el.textContent = text || "";
+  el.hidden = !text;
 }
 
-// ---------------------- LOGIN PROTECTION ----------------------
-// A logged-out visitor must never see this page (Case 4 in tests).
-const histUser = histGetCurrentUser();
-if (!histUser) {
-  // No currentUser -> go to login, which explains why (auth=required),
-  // and returns here afterwards (next=history).
-  window.location.href = "login.html?auth=required&next=history";
-}
-
-// ---------------------- Formatting helpers ----------------------
-function fmtKg(n, d) {
-  return Number(n).toLocaleString("en-US", { minimumFractionDigits: d == null ? 1 : d, maximumFractionDigits: d == null ? 1 : d });
-}
-function yesNo(v) { return v ? "Yes" : "No"; }
-
-const MODE_LABELS = {
-  car: "Car", bike: "Motorbike", bus: "Bus", train: "Train",
-  metro: "Metro", bicycle: "Bicycle", walking: "Walking",
-};
-
-// Human-readable summary lines for one assessment entry.
-function detailLines(item) {
-  const t = item.transport || {};
-  const e = item.electricity || {};
-  const w = item.waste || {};
-  const tierKg = { 1: "≈0.5 kg/day", 2: "≈1 kg/day", 3: "≈2 kg/day" }[w.tier] || String(w.tier);
-  return [
-    "<h4>Transport</h4><p>" +
-      "Mode: <code>" + (MODE_LABELS[t.mode] || t.mode || "—") + "</code> · " +
-      "Fuel: <code>" + (t.fuel ? (t.fuel === "cng" ? "CNG" : t.fuel.charAt(0).toUpperCase() + t.fuel.slice(1)) : "N/A") + "</code><br />" +
-      "Distance: <code>" + t.distance + " km/day</code> · " +
-      "Days/week: <code>" + t.days + "</code> · " +
-      "Travelling together: <code>" + t.occupancy + "</code></p>",
-    "<h4>Electricity</h4><p>" +
-      "Usage: <code>" + e.kwh + " kWh/month</code> · " +
-      "People in household: <code>" + e.people + "</code> · " +
-      "Renewable source: <code>" + yesNo(e.renewable) + "</code></p>",
-    "<h4>Waste</h4><p>" +
-      "Generation tier: <code>" + tierKg + "</code> · " +
-      "Recycling practiced: <code>" + yesNo(w.recycle) + "</code></p>",
-    "<h4>Result</h4><p>" +
-      "Transport <code>" + fmtKg((item.monthlyBreakdown || {}).transport) + " kg/mo</code> · " +
-      "Electricity <code>" + fmtKg((item.monthlyBreakdown || {}).electricity) + " kg/mo</code> · " +
-      "Waste <code>" + fmtKg((item.monthlyBreakdown || {}).waste) + " kg/mo</code><br />" +
-      "Yearly total: <code>" + fmtKg(item.totalFootprint, 1) + " kg CO₂e/year</code> · " +
-      "Conservation Index: <code>" + Number(item.conservationIndex).toFixed(1) + "%</code></p>",
-  ].join("");
-}
-
-// Build ONE history card's HTML from an entry object.
-function historyCardHtml(item, numberLabel) {
-  const b = item.monthlyBreakdown || {};
-  const grade = item.grade ? '<span class="hist-grade">Grade ' + item.grade + "</span>" : "";
-  return (
-    '<article class="hist-card" data-id="' + item.id + '">' +
-      '<div class="hist-card-top">' +
-        '<span class="hist-num">' + numberLabel + "</span>" +
-        '<span class="hist-date-badge">Date: ' + item.date + "</span>" +
-        grade +
-      "</div>" +
-      '<div class="hist-footprint-line">' +
-        '<span class="hist-total">' + fmtKg(item.monthlyFootprint) + "</span>" +
-        '<span class="hist-total-unit">kg CO₂e / month</span>' +
-      "</div>" +
-      '<div class="hist-cats">' +
-        '<div class="hist-cat cat-transport">Transport<b>' + fmtKg(b.transport) + " kg</b></div>" +
-        '<div class="hist-cat cat-electricity">Electricity<b>' + fmtKg(b.electricity) + " kg</b></div>" +
-        '<div class="hist-cat cat-waste">Waste<b>' + fmtKg(b.waste) + " kg</b></div>" +
-      "</div>" +
-      '<div class="hist-details">' + detailLines(item) + "</div>" +
-      '<div class="hist-actions">' +
-        '<button type="button" class="hist-action" data-details>View Details</button>' +
-        '<button type="button" class="hist-action danger" data-delete>' +
-          '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>' +
-          "Delete</button>" +
-      "</div>" +
-    "</article>"
-  );
-}
-
-// ============================================================
-// RENDER — user-specific history
-// ============================================================
-function renderHistory() {
-  const allHistory = histReadAllHistory();
-
-  // USER-SPECIFIC FILTER: only entries tagged with THIS user's email.
-  // One user can never see another user's assessments.
-  const userHistory = allHistory.filter(function (item) {
-    return item.email === histUser.email;
-  });
+async function renderHistory() {
+  const supabase = window.ecoTrackSupabase;
+  const data = window.EcoData;
 
   const listEl = document.getElementById("hist-list");
   const emptyEl = document.getElementById("hist-empty");
   const statsEl = document.getElementById("hist-stats");
 
-  listEl.innerHTML = "";
-
-  if (!userHistory.length) {
-    emptyEl.hidden = false;
-    statsEl.hidden = true;
+  if (!supabase || !data) {
+    setHistoryError("Could not reach EcoTrack's data service. Please refresh and try again.");
     return;
   }
-  emptyEl.hidden = true;
 
-  // Newest first (id is a timestamp).
-  userHistory.sort(function (a, b) { return b.id - a.id; });
-
-  // FOR LOOP - processes/displays multiple history records.
-  // Each pass builds one card for one saved assessment.
-  for (let i = 0; i < userHistory.length; i++) {
-    const label = "Assessment #" + (userHistory.length - i);
-    listEl.innerHTML += historyCardHtml(userHistory[i], label);
+  const user = await data.currentUser();
+  if (!user) {
+    window.location.href = "login.html?auth=required&next=history";
+    return;
   }
 
-  // ---- Summary strip (computed with another small for loop) ----
-  let sum = 0;
-  let bestIndex = -Infinity;
-  for (let i = 0; i < userHistory.length; i++) {
-    sum += Number(userHistory[i].monthlyFootprint) || 0;
-    bestIndex = Math.max(bestIndex, Number(userHistory[i].conservationIndex) || 0);
+  const userName = String(user.user_metadata?.full_name || user.email || "User").trim();
+  const firstName = userName.split(/\s+/)[0];
+
+  const chip = document.getElementById("hist-user-chip");
+  if (chip) chip.hidden = false;
+  const nameEl = document.getElementById("hist-name");
+  if (nameEl) nameEl.textContent = firstName;
+  const avatarEl = document.getElementById("hist-avatar");
+  if (avatarEl) avatarEl.textContent = firstName.charAt(0).toUpperCase();
+
+  const logoutBtn = document.getElementById("hist-logout");
+  if (logoutBtn && !logoutBtn.dataset.bound) {
+    logoutBtn.dataset.bound = "1";
+    logoutBtn.addEventListener("click", async () => {
+      await supabase.auth.signOut();
+      window.location.href = "login.html";
+    });
   }
-  document.getElementById("stat-count").textContent = String(userHistory.length);
-  document.getElementById("stat-avg").textContent = fmtKg(sum / userHistory.length);
-  document.getElementById("stat-best").textContent = Number(bestIndex).toFixed(1) + "%";
-  statsEl.hidden = false;
-}
 
-// ============================================================
-// EVENTS — details toggle + single-item delete
-// ============================================================
-function bindListActions() {
-  const listEl = document.getElementById("hist-list");
+  // ---- Read the data ------------------------------------------------
+  // Both calls are independent, so run them together.
+  let history = null;
+  let assessments = [];
+  let loadError = null;
 
-  listEl.addEventListener("click", function (e) {
-    const card = e.target.closest(".hist-card");
-    if (!card) return;
-    const idNum = Number(card.getAttribute("data-id"));
+  const [historyResult, assessmentResult] = await Promise.allSettled([
+    data.getHistory(200),
+    supabase
+      .from("assessments")
+      .select("id, created_at, monthly_footprint, eco_grade, eco_score, transport_emission, electricity_emission, waste_emission, assessment_data")
+      .order("created_at", { ascending: false })
+      .limit(200),
+  ]);
 
-    // View Details — expand/collapse this card's input summary.
-    if (e.target.closest("[data-details]")) {
-      card.classList.toggle("open");
-      const btn = card.querySelector("[data-details]");
-      btn.textContent = card.classList.contains("open") ? "Hide Details" : "View Details";
-      return;
+  if (historyResult.status === "fulfilled") {
+    history = historyResult.value;
+  } else {
+    loadError = historyResult.reason;
+  }
+
+  if (assessmentResult.status === "fulfilled") {
+    const { data: rows, error } = assessmentResult.value;
+    if (error) loadError = loadError || error;
+    else assessments = rows || [];
+  } else {
+    loadError = loadError || assessmentResult.reason;
+  }
+
+  if (loadError) {
+    console.error("EcoTrack: history could not be loaded.", loadError);
+    setHistoryError("Your history could not be loaded right now. Please refresh and try again.");
+    if (statsEl) statsEl.hidden = true;
+    if (emptyEl) emptyEl.hidden = true;
+    if (listEl) listEl.innerHTML = "";
+    return;
+  }
+  // Everything below is a successful load, so clear any earlier banner.
+  setHistoryError("");
+
+  const streak = (history && history.streak) || {};
+  const challenges = (history && history.challenges) || [];
+  const assessmentCount = (history && history.assessment_count) || assessments.length;
+  const tz = data.deviceTimezone();
+
+  if (!challenges.length && !assessments.length) {
+    if (emptyEl) emptyEl.hidden = false;
+    if (statsEl) statsEl.hidden = true;
+    if (listEl) listEl.innerHTML = "";
+    setHistoryMessage("");
+    return;
+  }
+
+  if (emptyEl) emptyEl.hidden = true;
+  if (statsEl) statsEl.hidden = false;
+
+  // ---- Summary strip ------------------------------------------------
+  // Averages are computed from this user's own rows in the browser;
+  // no total or average is invented when there is nothing to average.
+  // asNumber semantics: a null/"" column must not become a real 0.
+  const asNum = (v) =>
+    v === null || v === undefined || v === "" ? NaN : Number(v);
+
+  const footprints = assessments.map((r) => asNum(r.monthly_footprint)).filter(Number.isFinite);
+  const scores = assessments.map((r) => asNum(r.eco_score)).filter(Number.isFinite);
+
+  const avgFootprint = footprints.length
+    ? data.num(footprints.reduce((a, b) => a + b, 0) / footprints.length, 1)
+    : "—";
+  const bestScore = scores.length ? data.num(Math.min.apply(null, scores), 1) : "—";
+
+  const setStat = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+  setStat("stat-count", assessmentCount);
+  setStat("stat-avg", avgFootprint);
+  setStat("stat-best", bestScore);
+
+  setStat("stat-streak-current", `${Number(streak.current_streak) || 0} / ${Number(streak.longest_streak) || 0}`);
+  setStat("stat-saved", data.num(streak.total_carbon_saved, 1));
+
+  // ---- Build the list ----------------------------------------------
+  if (!listEl) return;
+  listEl.innerHTML = "";
+
+  const section = (title, subtitle) => {
+    const head = document.createElement("div");
+    head.className = "hist-section-head";
+    head.innerHTML = `<h2>${esc(title)}</h2><p>${esc(subtitle)}</p>`;
+    listEl.appendChild(head);
+  };
+
+  const card = (html) => {
+    const article = document.createElement("article");
+    article.className = "hist-card";
+    article.innerHTML = html;
+    listEl.appendChild(article);
+  };
+
+  if (assessments.length) {
+    section(
+      "Carbon assessments",
+      `${assessmentCount} completed · newest first`
+    );
+
+    for (let i = 0; i < assessments.length; i++) {
+      const row = assessments[i];
+      const extra = row.assessment_data || {};
+      const grade = row.eco_grade || extra.grade || "—";
+      const parts = [];
+      if (Number.isFinite(asNum(row.transport_emission))) {
+        parts.push(`Transport ${data.num(row.transport_emission, 1)} kg`);
+      }
+      if (Number.isFinite(asNum(row.electricity_emission))) {
+        parts.push(`Electricity ${data.num(row.electricity_emission, 1)} kg`);
+      }
+      if (Number.isFinite(asNum(row.waste_emission))) {
+        parts.push(`Waste ${data.num(row.waste_emission, 1)} kg`);
+      }
+
+      card(`
+        <div class="hist-card-top">
+          <span class="hist-num">Assessment</span>
+          <span class="hist-date-badge">${esc(data.prettyDateTime(row.created_at, tz))}</span>
+          <span class="hist-grade" style="background:#0F9D6E;color:#fff;">${esc(grade)}</span>
+        </div>
+        <div style="margin-top: 1rem;">
+          <h3 style="margin: 0 0 0.5rem;">${data.num(row.monthly_footprint, 1)} kg CO₂e per month</h3>
+          <p style="margin:0; color:#64748B;">
+            Conservation Index ${data.num(row.eco_score, 1)}${parts.length ? " · " + esc(parts.join(" · ")) : ""}
+          </p>
+          ${extra.highest_contributor ? `<p style="margin:0.5rem 0 0; color:#64748B;">Largest contributor: ${esc(extra.highest_contributor)}</p>` : ""}
+        </div>
+        <div class="hist-footprint-line" style="margin-top:1rem;">
+          <span class="hist-total" style="color:#0F9D6E;">${data.num(Number.isFinite(asNum(row.monthly_footprint)) ? asNum(row.monthly_footprint) * 12 : null, 0)}</span>
+          <span class="hist-total-unit">kg CO₂e per year</span>
+        </div>
+      `);
     }
+  }
 
-    // Delete — remove ONLY this assessment, after confirmation.
-    if (e.target.closest("[data-delete]")) {
-      const ok = window.confirm("Delete this assessment permanently?\nThis removes only this one entry.");
-      if (!ok) return;
+  if (challenges.length) {
+    section(
+      "Daily challenges",
+      `${Number(streak.challenges_completed) || 0} completed of ${challenges.length} assigned`
+    );
 
-      const all = histReadAllHistory();
-      // Find its position in the FULL array (entries are email-tagged,
-      // and ids are unique, so deleting by id never touches other users).
-      let targetIdx = -1;
-      let i = 0;
-      while (i < all.length) {          // small search loop to locate the entry
-        if (all[i].id === idNum && all[i].email === histUser.email) {
-          targetIdx = i;
-          break;
+    for (let i = 0; i < challenges.length; i++) {
+      const row = challenges[i];
+      const isCompleted = row.status === "completed";
+      card(`
+        <div class="hist-card-top">
+          <span class="hist-num">Challenge</span>
+          <span class="hist-date-badge">${esc(data.prettyDate(row.challenge_date, tz))}</span>
+          ${
+            isCompleted
+              ? '<span class="hist-grade" style="background:#2DBE8E;color:white;">Completed</span>'
+              : '<span class="hist-grade" style="background:#E2E8F0;color:#64748B;">Pending</span>'
+          }
+        </div>
+        <div style="margin-top: 1rem;">
+          <h3 style="margin: 0 0 0.5rem;">${esc(row.title || "Untitled challenge")}</h3>
+          <p style="margin:0; color:#64748B;">Category: ${esc(data.categoryLabel(row.category))}${
+            row.difficulty ? " · " + esc(row.difficulty) : ""
+          }</p>
+        </div>
+        ${
+          isCompleted
+            ? `<div class="hist-footprint-line" style="margin-top:1rem;">
+                 <span class="hist-total" style="color:#2DBE8E;">${data.num(data.challengeSaving(row) ?? row.carbon_saved, 2)}</span>
+                 <span class="hist-total-unit">kg CO₂e saved${
+                   row.completed_at ? " · " + esc(data.prettyDateTime(row.completed_at, tz)) : ""
+                 }</span>
+               </div>`
+            : ""
         }
-        i++;
-      }
-      if (targetIdx !== -1) {
-        all.splice(targetIdx, 1);       // remove just that one assessment
-        histWriteHistory(all);
-        renderHistory();                // refresh the displayed list
-      }
+      `);
     }
-  });
+  }
+
+  setHistoryMessage("");
 }
 
-// ---------------------- Topbar user area + logout ----------------------
-function initTopbar() {
-  document.getElementById("hist-user-chip").hidden = false;
-  document.getElementById("hist-name").textContent =
-    String(histUser.name || "User").trim().split(/\s+/)[0];
-  document.getElementById("hist-avatar").textContent =
-    String(histUser.name || "U").trim().charAt(0).toUpperCase();
-
-  // Logout: remove ONLY the session — accounts and history remain.
-  document.getElementById("hist-logout").addEventListener("click", function () {
-    localStorage.removeItem(HIST_CURRENT_USER_KEY);
-    window.location.href = "login.html";
-  });
-}
-
-// ---------------------- Init ----------------------
-if (histUser) {           // only render when the guard above passed
-  initTopbar();
-  bindListActions();
+document.addEventListener("DOMContentLoaded", function () {
   renderHistory();
-}
+});
